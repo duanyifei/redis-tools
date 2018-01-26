@@ -105,3 +105,4 @@ ENV/
 
 # 测试文件
 redis_test.py
+test_setting.py
