@@ -13,7 +13,7 @@ class RedisTest(unittest.TestCase):
     def setUp(self):
 
         self.redis_tools = redis_tools.RedisTools(redis_uri=redis_uri)
-
+        # todo  测试其他数据类型copy 删除
         self.key_types = [
             # "str",
             "list",
@@ -30,22 +30,22 @@ class RedisTest(unittest.TestCase):
 
     def tearDown(self):
         # 清理由于测试失败遗留的数据
-        self.redis_tools.redisc_client.delete(*self.delete_keys)
+        self.redis_tools.redis_client.delete(*self.delete_keys)
         # copy
-        self.redis_tools.redisc_client.delete(*self.copy_keys)
-        self.redis_tools.redisc_client.delete(*["{}_copy".format(x) for x in self.copy_keys])
+        self.redis_tools.redis_client.delete(*self.copy_keys)
+        self.redis_tools.redis_client.delete(*["{}_copy".format(x) for x in self.copy_keys])
         return
 
     def test_lazy_delete(self):
         # 准备list数据
-        self.redis_tools.redisc_client.lpush(self.delete_key_base.format("list"), *range(8893))
+        self.redis_tools.redis_client.lpush(self.delete_key_base.format("list"), *range(8893))
         # 测试lazy删除
         delete_result = self.redis_tools.lazy_delete(*self.delete_keys)
         # 判断函数返回值
         self.assertEqual(delete_result, len(self.delete_keys))
         # 判断是否删除干净
         for key in self.delete_keys:
-            self.assertFalse(self.redis_tools.redisc_client.exists(key))
+            self.assertFalse(self.redis_tools.redis_client.exists(key))
         return
 
     def test_copy(self):
@@ -53,11 +53,11 @@ class RedisTest(unittest.TestCase):
             src_key = self.copy_key_base.format(_type)
             dst_key = self.copy_key_base.format(_type) + "_copy"
             if _type == 'list':
-                self.redis_tools.redisc_client.lpush(src_key, *range(100))
+                self.redis_tools.redis_client.lpush(src_key, *range(100))
             # 测试lazy删除
             copy_result = self.redis_tools.copy_key(src_key=src_key)
             self.assertTrue(copy_result)
-            self.assertTrue(self.redis_tools.redisc_client.exists(dst_key))
+            self.assertTrue(self.redis_tools.redis_client.exists(dst_key))
             self.assertEqual(self.redis_tools.get_key_len(src_key), self.redis_tools.get_key_len(dst_key))
         return
 

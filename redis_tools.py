@@ -47,16 +47,16 @@ class RedisTools(object):
         redis_uri = kwargs.get("redis_uri")
         redis_uri, key = self._parse_uri(redis_uri)
         if redis_uri:
-            self.redisc_client = redis.StrictRedis.from_url(redis_uri)
+            self.redis_client = redis.StrictRedis.from_url(redis_uri)
             self.redis_uri_key = key
         else:
-            self.redisc_client = None
+            self.redis_client = None
             self.redis_uri_key = None
         self.mode = "debug"  # quite, debug, normal
-        self.logger = get_logger("RedisTools")
+        self.logger = get_logger("RedisTools %s" % id(self))
 
     def __repr__(self):
-        return "{}".format(self.redisc_client)
+        return "{}".format(self.redis_client)
 
     def _parse_uri(self, uri):
         """
@@ -93,26 +93,83 @@ class RedisTools(object):
             raise ValueError(error)
         return (data['uri'], data['key'])
 
+    def _lazy_delete_hash(self, key):
+        """
+        use hscan and hdel cmd to delete a large hash
+        :param key:
+        :return:
+        """
+        limits = 1000
+        cursor, infos = self.redis_client.hscan(key, cursor=0, count=limits)
+        if infos:
+            self.redis_client.hdel(key, *infos.keys())
+        while cursor:
+            cursor, infos = self.redis_client.hscan(key, cursor=cursor, count=limits)
+            if infos:
+                self.redis_client.hdel(key, *infos.keys())
+        self._print_log("delete hash \"{}\" ok !!!".format(key))
+        return 1
+
     def _lazy_delete_list(self, key):
         """
         use rpop cmd to delete a large list
         :param key:
         :return:
         """
-        pipe = self.redisc_client.pipeline()
+        pipe = self.redis_client.pipeline()
         limits = 1000
         while 1:
             # todo  use lua script
             for i in range(limits):
                 pipe.rpop(key)
             pipe.execute()
-            le = self.redisc_client.llen(key)
+            le = self.redis_client.llen(key)
             if not le:
                 break
             else:
                 pass
                 # self._print_log("delete list \"{}\" size {}".format(key, le))
         self._print_log("delete list \"{}\" ok !!!".format(key))
+        return 1
+
+    def _lazy_delete_set(self, key):
+        """
+        use sscan and srem cmd to delete a large set
+        :param key:
+        :return:
+        """
+        limits = 1000
+        cursor, values = self.redis_client.sscan(key, cursor=0, count=limits)
+        if values:
+            self.redis_client.srem(key, *values)
+        while cursor:
+            cursor, values = self.redis_client.sscan(key, cursor=cursor, count=limits)
+            if values:
+                self.redis_client.srem(key, *values)
+        self._print_log("delete set \"{}\" ok !!!".format(key))
+        return 1
+
+    def _lazy_delete_string(self, key):
+        """
+        use hscan and hdel cmd to delete a large hash
+        :param key:
+        :return:
+        """
+        self._print_log("delete string \"{}\" ok !!!".format(key))
+        return 1
+
+    def _lazy_delete_zset(self, key):
+        """
+        use zremrangebyrank cmd to delete a large zset
+        :param key:
+        :return:
+        """
+        limits = 10000
+        while 1:
+            rem_count = self.redis_client.zremrangebyrank(key, 0, limits)
+            if not rem_count:
+                break
+        self._print_log("delete zset \"{}\" ok !!!".format(key))
         return 1
 
     def _print_log(self, _log):
@@ -144,6 +201,22 @@ class RedisTools(object):
         self._print_log("copy operation ok!! new key {} len {}".format(dst_key, dst_key_len))
         return True
 
+    def copy_keys(self, src=None, src_key=None, dst=None, dst_key=None, keys=0):
+        """
+        复制 keys  支持批量指定
+        :param src:
+        :param src_key:
+        :param dst:
+        :param dst_key:
+        :param keys:
+        :return:
+        """
+        if not keys:
+            return False
+        for key in src.redis_client.keys(src_key):
+            self.copy_key(src, key, dst, key)
+        return True
+
     def get_key_len(self, key, _type=None):
         """
         获取数据量
@@ -154,15 +227,15 @@ class RedisTools(object):
         if not _type:
             _type = self.get_key_type(key)
         if _type == 'list':
-            le = self.redisc_client.llen(key)
+            le = self.redis_client.llen(key)
         elif _type == 'zset':
-            le = self.redisc_client.zcard(key)
+            le = self.redis_client.zcard(key)
         elif _type == 'set':
-            le = self.redisc_client.scard(key)
+            le = self.redis_client.scard(key)
         elif _type == 'hash':
-            le = self.redisc_client.hlen(key)
+            le = self.redis_client.hlen(key)
         elif _type == 'string':
-            le = self.redisc_client.strlen(key)
+            le = self.redis_client.strlen(key)
         else:
             raise TypeError("unknow type {} for key \"{}\"".format(_type, key))
         return le
@@ -173,7 +246,7 @@ class RedisTools(object):
         :param key:
         :return:
         """
-        return self.redisc_client.type(key).lower().decode()
+        return self.redis_client.type(key).lower().decode()
 
     def get_value(self, key, _type=None):
         """
@@ -187,9 +260,33 @@ class RedisTools(object):
             start = 0
             step = 1000
             while start < le:
-                data = self.redisc_client.lrange(key, start, start + step - 1)
+                data = self.redis_client.lrange(key, start, start + step - 1)
                 start += step
                 yield data
+        elif _type == "hash":
+            batch_size = 1000
+            cursor, infos = self.redis_client.hscan(key, cursor=0, count=batch_size)
+            yield infos
+            while cursor:
+                cursor, infos = self.redis_client.hscan(key, cursor=cursor, count=batch_size)
+                yield infos
+        elif _type == 'set':
+            batch_size = 100
+            cursor, infos = self.redis_client.sscan(key, cursor=0, count=batch_size)
+            yield infos
+            while cursor:
+                cursor, infos = self.redis_client.sscan(key, cursor=cursor, count=batch_size)
+                yield infos
+        elif _type == 'zset':
+            batch_size = 100
+            cursor, infos = self.redis_client.zscan(key, cursor=0, count=batch_size)
+            yield infos
+            while cursor:
+                cursor, infos = self.redis_client.zscan(key, cursor=cursor, count=batch_size)
+                yield infos
+        elif _type == 'string':
+            # todo
+            pass
 
     def put_value(self, key, _type, data=None):
         """
@@ -204,7 +301,9 @@ class RedisTools(object):
             if not isinstance(data, (list, tuple)):
                 data = [data]
             if data:
-                self.redisc_client.rpush(key, *data)
+                self.redis_client.rpush(key, *data)
+        elif _type == 'hash':
+            self.redis_client.hmset(key, data)
         return
 
     def lazy_delete(self, *keys):
@@ -232,27 +331,46 @@ def main():
         python redis_tools.py --copy src dst
         src/dst: redis://ip:port/0/data
     """
+    copy_keys_help = u"""
+            support pattern:  keys *
+            python redis_tools.py --copy_keys src dst
+            src/dst: redis://ip:port/0/data
+        """
     parser.add_argument("--copy", action="store", nargs="*", help=copy_help)
+    parser.add_argument("--copy_keys", action="store", nargs="*", help=copy_keys_help)
+    parser.add_argument("--delete", action="store", nargs="*", help=copy_help)
 
-    redis_tools = RedisTools(redis_uri="redis://192.168.174.130/3")
+    redis_tools = RedisTools(redis_uri="redis://192.168.174.130/10")
     cmd_args = parser.parse_args()
-    if cmd_args.copy:
-        args_count = len(cmd_args.copy)
+    if cmd_args.copy or cmd_args.copy_keys:
+        pattern_flag = 0
+        if cmd_args.copy_keys:
+            pattern_flag = 1
+            copy_args = cmd_args.copy_keys
+        elif cmd_args.copy:
+            copy_args = cmd_args.copy
+        args_count = len(copy_args)
         if args_count > 2:
             parser.exit(status=1, message="type --help to have more info")
         else:
-            src = cmd_args.copy[0]
+            src = copy_args[0]
             if src.startswith("redis://"):
                 src = RedisTools(redis_uri=src)
                 src_key = src.redis_uri_key
             if args_count == 2:
-                dst = cmd_args.copy[1]
+                dst = copy_args[1]
                 dst = RedisTools(redis_uri=dst)
                 dst_key = dst.redis_uri_key
             else:
                 dst = src
                 dst_key = None
-            redis_tools.copy_key(src=src, src_key=src_key, dst=dst, dst_key=dst_key)
+            if pattern_flag:
+                redis_tools.copy_keys(src=src, src_key=src_key, dst=dst, dst_key=dst_key, keys=pattern_flag)
+            else:
+                redis_tools.copy_key(src=src, src_key=src_key, dst=dst, dst_key=dst_key)
+    elif cmd_args.delete:
+        keys = cmd_args.delete
+        redis_tools.lazy_delete(*keys)
     else:
         pass
     return
