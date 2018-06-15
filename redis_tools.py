@@ -308,6 +308,7 @@ class RedisTools(object):
         elif _type == "set":
             self.redis_client.sadd(key, *data)
         elif _type == "zset":
+            data = [(x[0].decode(), x[1]) for x in data]
             self.redis_client.zadd(key, **dict(data))
         elif _type == 'string':
             self.redis_client.set(key, data)
