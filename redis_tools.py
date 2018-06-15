@@ -236,6 +236,8 @@ class RedisTools(object):
             le = self.redis_client.hlen(key)
         elif _type == 'string':
             le = self.redis_client.strlen(key)
+        elif _type == 'none':
+            le = 0
         else:
             raise TypeError("unknow type {} for key \"{}\"".format(_type, key))
         return le
