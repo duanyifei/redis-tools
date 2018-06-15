@@ -305,6 +305,10 @@ class RedisTools(object):
                 self.redis_client.rpush(key, *data)
         elif _type == 'hash':
             self.redis_client.hmset(key, data)
+        elif _type == "set":
+            self.redis_client.sadd(key, *data)
+        elif _type == "zset":
+            self.redis_client.zadd(key, **dict(data))
         elif _type == 'string':
             self.redis_client.set(key, data)
         return
