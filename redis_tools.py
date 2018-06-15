@@ -287,8 +287,7 @@ class RedisTools(object):
                 cursor, infos = self.redis_client.zscan(key, cursor=cursor, count=batch_size)
                 yield infos
         elif _type == 'string':
-            # todo
-            pass
+            yield self.redis_client.get(key)
 
     def put_value(self, key, _type, data=None):
         """
@@ -306,6 +305,8 @@ class RedisTools(object):
                 self.redis_client.rpush(key, *data)
         elif _type == 'hash':
             self.redis_client.hmset(key, data)
+        elif _type == 'string':
+            self.redis_client.set(key, data)
         return
 
     def lazy_delete(self, *keys):
