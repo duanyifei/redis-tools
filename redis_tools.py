@@ -328,6 +328,23 @@ class RedisTools(object):
             getattr(self, "_lazy_delete_{}".format(_type))(key)
         return len(keys)
 
+    # 统计
+    def statis_keys(self):
+        """统计redis中key情况"""
+        keys_len = []
+        keys = self.redis_client.keys("*")
+        for key in keys:
+            _type = self.get_key_type(key)
+            _le = self.get_key_len(key, _type)
+            if _le < 2000:
+                continue
+            keys_len.append((key, _le))
+
+        keys_len.sort(key=lambda x: x[1])
+        for item in keys_len:
+            print("{} {}".format(*item))
+        return
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -344,12 +361,19 @@ def main():
             python redis_tools.py --copy_keys src dst
             src/dst: redis://ip:port/0/data
         """
+    parser.add_argument("--uri", action="store", help=copy_help)
+
     parser.add_argument("--copy", action="store", nargs="*", help=copy_help)
     parser.add_argument("--copy_keys", action="store", nargs="*", help=copy_keys_help)
     parser.add_argument("--delete", action="store", nargs="*", help=copy_help)
+    parser.add_argument("--statis_keys", action="store_true", help=copy_help)
 
-    redis_tools = RedisTools(redis_uri="redis://192.168.174.130/10")
     cmd_args = parser.parse_args()
+
+    redis_uri = ""
+    if cmd_args.uri:
+        redis_uri = cmd_args.uri
+    redis_tools = RedisTools(redis_uri=redis_uri)
     if cmd_args.copy or cmd_args.copy_keys:
         pattern_flag = 0
         if cmd_args.copy_keys:
@@ -379,6 +403,8 @@ def main():
     elif cmd_args.delete:
         keys = cmd_args.delete
         redis_tools.lazy_delete(*keys)
+    elif cmd_args.statis_keys:
+        redis_tools.statis_keys()
     else:
         pass
     return
