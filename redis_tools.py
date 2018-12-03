@@ -360,7 +360,7 @@ class RedisTools(object):
 
         keys_mem.sort(key=lambda x: x[1])
         for item in keys_mem[-10:]:
-            print("{} {}".format(*item))
+            print("{} {} {}".format(*item))
         return
 
 
