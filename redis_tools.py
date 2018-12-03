@@ -356,11 +356,11 @@ class RedisTools(object):
         for key in keys:
             _mem = self.redis_client.memory_usage(key)
             if _mem:
-                keys_mem.append((key, _mem, "{:.2f}".format(_mem / used_memory)))
+                keys_mem.append((key, _mem, "{}%".format(int(_mem / used_memory * 100))))
 
         keys_mem.sort(key=lambda x: x[1])
         for item in keys_mem[-10:]:
-            print("{} {} {}".format(*item))
+            print("{}\t{}\t{}".format(*item))
         return
 
 
