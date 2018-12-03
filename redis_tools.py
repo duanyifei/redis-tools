@@ -348,12 +348,15 @@ class RedisTools(object):
     # show memory
     def show_memory(self):
         """统计redis中key情况"""
+        # 获取总内存使用量
+        used_memory = self.redis_client.info()['used_memory']
+        #
         keys_mem = []
         keys = self.redis_client.keys("*")
         for key in keys:
             _mem = self.redis_client.memory_usage(key)
             if _mem:
-                keys_mem.append((key, _mem))
+                keys_mem.append((key, _mem, "{:.2f}".format(_mem / used_memory)))
 
         keys_mem.sort(key=lambda x: x[1])
         for item in keys_mem[-10:]:
