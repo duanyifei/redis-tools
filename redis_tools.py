@@ -352,7 +352,8 @@ class RedisTools(object):
         keys = self.redis_client.keys("*")
         for key in keys:
             _mem = self.redis_client.memory_usage(key)
-            keys_mem.append((key, _mem))
+            if _mem:
+                keys_mem.append((key, _mem))
 
         keys_mem.sort(key=lambda x: x[1])
         for item in keys_mem[-10:]:
