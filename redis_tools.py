@@ -345,6 +345,20 @@ class RedisTools(object):
             print("{} {}".format(*item))
         return
 
+    # show memory
+    def show_memory(self):
+        """统计redis中key情况"""
+        keys_mem = []
+        keys = self.redis_client.keys("*")
+        for key in keys:
+            _mem = self.redis_client.memory_usage(key)
+            keys_mem.append((key, _mem))
+
+        keys_mem.sort(key=lambda x: x[1])
+        for item in keys_mem[:10]:
+            print("{} {}".format(*item))
+        return
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -367,6 +381,7 @@ def main():
     parser.add_argument("--copy_keys", action="store", nargs="*", help=copy_keys_help)
     parser.add_argument("--delete", action="store", nargs="*", help=copy_help)
     parser.add_argument("--statis_keys", action="store_true", help=copy_help)
+    parser.add_argument("--show_memory", action="store_true", help=copy_help)
 
     cmd_args = parser.parse_args()
 
@@ -405,6 +420,8 @@ def main():
         redis_tools.lazy_delete(*keys)
     elif cmd_args.statis_keys:
         redis_tools.statis_keys()
+    elif cmd_args.show_memory:
+        redis_tools.show_memory()
     else:
         pass
     return
