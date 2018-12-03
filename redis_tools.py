@@ -355,7 +355,7 @@ class RedisTools(object):
             keys_mem.append((key, _mem))
 
         keys_mem.sort(key=lambda x: x[1])
-        for item in keys_mem[:10]:
+        for item in keys_mem[-10:]:
             print("{} {}".format(*item))
         return
 
