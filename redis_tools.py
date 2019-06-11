@@ -33,7 +33,9 @@ def get_logger(name, level=logging.DEBUG):
 
     std = logging.StreamHandler(stream=sys.stdout)
 
-    formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] [%(filename)s] [%(lineno)d] - %(message)s")
+    formatter = logging.Formatter(
+        "[%(asctime)s] [%(levelname)s] [%(filename)s] [%(lineno)d] - %(message)s"
+    )
     std.setFormatter(formatter)
 
     logger.addHandler(std)
@@ -44,8 +46,9 @@ def get_logger(name, level=logging.DEBUG):
 
 class RedisTools(object):
     def __init__(self, **kwargs):
-        redis_uri = kwargs.get("redis_uri")
-        redis_uri, key = self._parse_uri(redis_uri)
+        redis_uri = kwargs.get("redis_uri", "")
+        if redis_uri:
+            redis_uri, key = self._parse_uri(redis_uri)
         if redis_uri:
             self.redis_client = redis.StrictRedis.from_url(redis_uri)
             self.redis_uri_key = key
@@ -69,10 +72,7 @@ class RedisTools(object):
         error = "redis uri format error: {}".format(uri)
         p = urlparse(uri.strip("/"))
         path_count = p.path.count("/")
-        data = {
-            "uri": "",
-            "key": "",
-        }
+        data = {"uri": "", "key": ""}
         if "." not in p.netloc:
             raise ValueError(error)
         if path_count == 2:
@@ -80,18 +80,18 @@ class RedisTools(object):
             db = p.path.split("/")[1]
             if not db:
                 raise ValueError(error)
-            data['key'] = key
-            data['uri'] = "redis://{}/{}".format(p.netloc, db)
+            data["key"] = key
+            data["uri"] = "redis://{}/{}".format(p.netloc, db)
         elif path_count == 1:
             db = p.path.split("/")[1]
             if not db:
                 raise ValueError(error)
-            data['uri'] = "redis://{}/{}".format(p.netloc, db)
+            data["uri"] = "redis://{}/{}".format(p.netloc, db)
         elif path_count == 0:
-            data['uri'] = "redis://{}/{}".format(p.netloc, 0)
+            data["uri"] = "redis://{}/{}".format(p.netloc, 0)
         else:
             raise ValueError(error)
-        return (data['uri'], data['key'])
+        return (data["uri"], data["key"])
 
     def _lazy_delete_hash(self, key):
         """
@@ -107,7 +107,7 @@ class RedisTools(object):
             cursor, infos = self.redis_client.hscan(key, cursor=cursor, count=limits)
             if infos:
                 self.redis_client.hdel(key, *infos.keys())
-        self._print_log("delete hash \"{}\" ok !!!".format(key))
+        self._print_log('delete hash "{}" ok !!!'.format(key))
         return 1
 
     def _lazy_delete_list(self, key):
@@ -129,7 +129,7 @@ class RedisTools(object):
             else:
                 pass
                 # self._print_log("delete list \"{}\" size {}".format(key, le))
-        self._print_log("delete list \"{}\" ok !!!".format(key))
+        self._print_log('delete list "{}" ok !!!'.format(key))
         return 1
 
     def _lazy_delete_set(self, key):
@@ -146,7 +146,7 @@ class RedisTools(object):
             cursor, values = self.redis_client.sscan(key, cursor=cursor, count=limits)
             if values:
                 self.redis_client.srem(key, *values)
-        self._print_log("delete set \"{}\" ok !!!".format(key))
+        self._print_log('delete set "{}" ok !!!'.format(key))
         return 1
 
     def _lazy_delete_string(self, key):
@@ -155,7 +155,7 @@ class RedisTools(object):
         :param key:
         :return:
         """
-        self._print_log("delete string \"{}\" ok !!!".format(key))
+        self._print_log('delete string "{}" ok !!!'.format(key))
         return 1
 
     def _lazy_delete_zset(self, key):
@@ -169,11 +169,11 @@ class RedisTools(object):
             rem_count = self.redis_client.zremrangebyrank(key, 0, limits)
             if not rem_count:
                 break
-        self._print_log("delete zset \"{}\" ok !!!".format(key))
+        self._print_log('delete zset "{}" ok !!!'.format(key))
         return 1
 
     def _print_log(self, _log):
-        if self.mode not in ['quite']:
+        if self.mode not in ["quite"]:
             self.logger.debug(_log)
         return
 
@@ -198,7 +198,9 @@ class RedisTools(object):
         for data in src.get_value(src_key, _type=key_type):
             dst.put_value(dst_key, _type=key_type, data=data)
         dst_key_len = dst.get_key_len(dst_key)
-        self._print_log("copy operation ok!! new key {} len {}".format(dst_key, dst_key_len))
+        self._print_log(
+            "copy operation ok!! new key {} len {}".format(dst_key, dst_key_len)
+        )
         return True
 
     def copy_keys(self, src=None, src_key=None, dst=None, dst_key=None, keys=0):
@@ -226,20 +228,20 @@ class RedisTools(object):
         """
         if not _type:
             _type = self.get_key_type(key)
-        if _type == 'list':
+        if _type == "list":
             le = self.redis_client.llen(key)
-        elif _type == 'zset':
+        elif _type == "zset":
             le = self.redis_client.zcard(key)
-        elif _type == 'set':
+        elif _type == "set":
             le = self.redis_client.scard(key)
-        elif _type == 'hash':
+        elif _type == "hash":
             le = self.redis_client.hlen(key)
-        elif _type == 'string':
+        elif _type == "string":
             le = self.redis_client.strlen(key)
-        elif _type == 'none':
+        elif _type == "none":
             le = 0
         else:
-            raise TypeError("unknow type {} for key \"{}\"".format(_type, key))
+            raise TypeError('unknow type {} for key "{}"'.format(_type, key))
         return le
 
     def get_key_type(self, key):
@@ -270,23 +272,29 @@ class RedisTools(object):
             cursor, infos = self.redis_client.hscan(key, cursor=0, count=batch_size)
             yield infos
             while cursor:
-                cursor, infos = self.redis_client.hscan(key, cursor=cursor, count=batch_size)
+                cursor, infos = self.redis_client.hscan(
+                    key, cursor=cursor, count=batch_size
+                )
                 yield infos
-        elif _type == 'set':
+        elif _type == "set":
             batch_size = 100
             cursor, infos = self.redis_client.sscan(key, cursor=0, count=batch_size)
             yield infos
             while cursor:
-                cursor, infos = self.redis_client.sscan(key, cursor=cursor, count=batch_size)
+                cursor, infos = self.redis_client.sscan(
+                    key, cursor=cursor, count=batch_size
+                )
                 yield infos
-        elif _type == 'zset':
+        elif _type == "zset":
             batch_size = 100
             cursor, infos = self.redis_client.zscan(key, cursor=0, count=batch_size)
             yield infos
             while cursor:
-                cursor, infos = self.redis_client.zscan(key, cursor=cursor, count=batch_size)
+                cursor, infos = self.redis_client.zscan(
+                    key, cursor=cursor, count=batch_size
+                )
                 yield infos
-        elif _type == 'string':
+        elif _type == "string":
             yield self.redis_client.get(key)
 
     def put_value(self, key, _type, data=None):
@@ -298,19 +306,19 @@ class RedisTools(object):
         """
         if not data:
             return
-        if _type == 'list':
+        if _type == "list":
             if not isinstance(data, (list, tuple)):
                 data = [data]
             if data:
                 self.redis_client.rpush(key, *data)
-        elif _type == 'hash':
+        elif _type == "hash":
             self.redis_client.hmset(key, data)
         elif _type == "set":
             self.redis_client.sadd(key, *data)
         elif _type == "zset":
             data = [(x[0].decode(), x[1]) for x in data]
             self.redis_client.zadd(key, **dict(data))
-        elif _type == 'string':
+        elif _type == "string":
             self.redis_client.set(key, data)
         return
 
@@ -322,8 +330,8 @@ class RedisTools(object):
         """
         for key in keys:
             _type = self.get_key_type(key)
-            if _type == 'none':
-                self._print_log("key \"{}\" not exists".format(key))
+            if _type == "none":
+                self._print_log('key "{}" not exists'.format(key))
                 continue
             getattr(self, "_lazy_delete_{}".format(_type))(key)
         return len(keys)
@@ -349,27 +357,26 @@ class RedisTools(object):
     def show_memory(self):
         """统计redis中key情况"""
         # 获取总内存使用量
-        used_memory = self.redis_client.info()['used_memory']
+        used_memory = self.redis_client.info()["used_memory"]
         #
         keys_mem = []
         keys = self.redis_client.keys("*")
         for key in keys:
             _mem = self.redis_client.memory_usage(key)
             if _mem:
-                keys_mem.append((key, _mem, "{}%".format(int(_mem / used_memory * 100))))
+                keys_mem.append((key, _mem, float(_mem * 1.0 / used_memory * 100)))
 
         keys_mem.sort(key=lambda x: x[1])
         for item in keys_mem[-10:]:
             print("{}\t{}\t{}".format(*item))
+        sum_usage = sum([x[1] for x in keys_mem])
+        print("{}%".format(float(sum_usage * 1.0 / used_memory * 100)))
         return
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description=u"redis_tools 命令帮助",
-        add_help=False,
-    )
-    parser.add_argument('--help', action="help", help="%(prog)s help info")
+    parser = argparse.ArgumentParser(description=u"redis_tools 命令帮助", add_help=False)
+    parser.add_argument("--help", action="help", help="%(prog)s help info")
     copy_help = u"""
         python redis_tools.py --copy src dst
         src/dst: redis://ip:port/0/data
@@ -416,7 +423,13 @@ def main():
                 dst = src
                 dst_key = None
             if pattern_flag:
-                redis_tools.copy_keys(src=src, src_key=src_key, dst=dst, dst_key=dst_key, keys=pattern_flag)
+                redis_tools.copy_keys(
+                    src=src,
+                    src_key=src_key,
+                    dst=dst,
+                    dst_key=dst_key,
+                    keys=pattern_flag,
+                )
             else:
                 redis_tools.copy_key(src=src, src_key=src_key, dst=dst, dst_key=dst_key)
     elif cmd_args.delete:
@@ -431,5 +444,5 @@ def main():
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
